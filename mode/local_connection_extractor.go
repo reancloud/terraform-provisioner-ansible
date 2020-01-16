@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/hashicorp/terraform/communicator/shared"
@@ -28,15 +29,26 @@ const (
 	DefaultTimeout = 5 * time.Minute
 )
 
+type connectionType struct {
+	WINRM string
+	SSH   string
+}
+
 type connectionInfo struct {
-	User       string
-	Password   string
+	User     string `mapstructure:"user"`
+	Password string `mapstructure:"password"`
+	Type     string `mapstructure:"type"`
+	Https    bool   `mapstructure:"https"`
+	Insecure bool   `mapstructure:"insecure"`
+	Ntlm     bool   `mapstructure:"use_ntlm"`
+	Cacert   string `mapstructure:"cacert"`
+
 	PrivateKey string `mapstructure:"private_key"`
-	Host       string
+	Host       string `mapstructure:"host"`
 	HostKey    string `mapstructure:"host_key"`
-	Port       int
+	Port       int    `mapstructure:"port"`
 	Agent      bool
-	Timeout    string
+	Timeout    string        `mapstructure:"timeout"`
 	ScriptPath string        `mapstructure:"script_path"`
 	TimeoutVal time.Duration `mapstructure:"-"`
 
@@ -46,8 +58,7 @@ type connectionInfo struct {
 	BastionHost       string `mapstructure:"bastion_host"`
 	BastionHostKey    string `mapstructure:"bastion_host_key"`
 	BastionPort       int    `mapstructure:"bastion_port"`
-
-	AgentIdentity string `mapstructure:"agent_identity"`
+	AgentIdentity     string `mapstructure:"agent_identity"`
 }
 
 func parseConnectionInfo(s *terraform.InstanceState) (*connectionInfo, error) {
@@ -63,7 +74,6 @@ func parseConnectionInfo(s *terraform.InstanceState) (*connectionInfo, error) {
 	if err := dec.Decode(s.Ephemeral.ConnInfo); err != nil {
 		return nil, err
 	}
-
 	// To default Agent to true, we need to check the raw string, since the
 	// decoded boolean can't represent "absence of config".
 	//
@@ -81,12 +91,16 @@ func parseConnectionInfo(s *terraform.InstanceState) (*connectionInfo, error) {
 	// Needed for IPv6 support.
 	connInfo.Host = shared.IpFormat(connInfo.Host)
 
+	connInfo.Port, err = strconv.Atoi(s.Ephemeral.ConnInfo["port"])
+
 	if connInfo.Port == 0 {
 		connInfo.Port = DefaultPort
 	}
+
 	if connInfo.ScriptPath == "" {
 		connInfo.ScriptPath = DefaultScriptPath
 	}
+
 	if connInfo.Timeout != "" {
 		connInfo.TimeoutVal = safeDuration(connInfo.Timeout, DefaultTimeout)
 	} else {

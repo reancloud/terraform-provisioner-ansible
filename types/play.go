@@ -520,7 +520,7 @@ func (v *Play) appendSharedArguments(command string, ansibleArgs LocalModeAnsibl
 
 	// inventory file:
 	command = fmt.Sprintf("%s --inventory-file='%s'", command, v.InventoryFile())
-
+	
 	// become:
 	if v.Become() {
 		command = fmt.Sprintf("%s --become", command)
