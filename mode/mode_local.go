@@ -76,12 +76,22 @@ const windowsInventoryTemplateLocal = `{{$top := . -}}
 
 {{if ne .ConnectionType "" -}}
 {{" "}}ansible_connection={{.ConnectionType -}}
+{{printf "\n" -}}
 {{end -}}
 
 {{if .NTLM }}
 {{" "}}ansible_winrm_transport={{.NTLM -}}
 {{printf "\n" -}}
 {{end -}}
+
+{{if eq .Cacert "" -}}
+{{" "}}ansible_winrm_server_cert_validation=ignore
+{{printf "\n" -}}
+{{end -}}
+
+{{" "}}ansible_winrm_read_timeout_sec=900
+{{" "}}ansible_winrm_operation_timeout_sec=800
+{{printf "\n" -}}
 
 {{if ne .Cacert "" -}}
 {{" "}}ansible_winrm_ca_trust_path={{.Cacert -}}
@@ -173,7 +183,6 @@ func (v *LocalMode) Run(plays []*types.Play, ansibleSSHSettings *types.AnsibleSS
 		if err != nil {
 			return err
 		}
-
 		defer os.Remove(targetPemFile)
 	}
 
@@ -361,7 +370,7 @@ func (v *LocalMode) writeKnownHosts(knownHosts []string) (string, error) {
 }
 
 func (v *LocalMode) writePem(pk string) (string, error) {
-	if v.connInfo.PrivateKey != "" {
+	if pk != "" {
 		file, err := ioutil.TempFile(os.TempDir(), uuid.NewV4().String())
 		defer file.Close()
 		if err != nil {
