@@ -121,6 +121,8 @@ const inventoryTemplateLocal = `{{$top := . -}}
 
 {{end}}`
 
+const moduleCommand = `ansible all -i in -m wait_for_connection -c 'timeout=600'`
+
 // NewLocalMode returns configured local mode provisioner.
 func NewLocalMode(o terraform.UIOutput, s *terraform.InstanceState) (*LocalMode, error) {
 
@@ -324,6 +326,15 @@ func (v *LocalMode) Run(plays []*types.Play, ansibleSSHSettings *types.AnsibleSS
 			defer os.Remove(play.InventoryFile())
 		}
 
+		//This is for executing module to to verify windows services are
+		//avaible before executing ansible playbook
+		executeCommand := strings.Replace(moduleCommand, "in", inventoryFile, 1)
+		v.o.Output(fmt.Sprintf("running module to verify windows machine availble: %s", executeCommand))
+
+		if err := v.runCommand(executeCommand); err != nil {
+			return err
+		}
+
 		// we can't pass bastion instance into this function
 		// we would end up with a circular import
 		command, err := play.ToLocalCommand(types.LocalModeAnsibleArgs{
@@ -459,6 +470,7 @@ func (v *LocalMode) writeInventory(play *types.Play) (string, error) {
 				fmt.Errorf("Error executing 'windows' template: ", err)
 			}
 		}
+
 		file, err := ioutil.TempFile(os.TempDir(), "temporary-ansible-inventory")
 		defer file.Close()
 		if err != nil {
