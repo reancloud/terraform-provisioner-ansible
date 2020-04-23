@@ -326,15 +326,16 @@ func (v *LocalMode) Run(plays []*types.Play, ansibleSSHSettings *types.AnsibleSS
 			defer os.Remove(play.InventoryFile())
 		}
 
-		//This is for executing module to to verify windows services are
-		//avaible before executing ansible playbook
-		executeCommand := strings.Replace(moduleCommand, "in", inventoryFile, 1)
-		v.o.Output(fmt.Sprintf("running module to verify windows machine availble: %s", executeCommand))
+		if v.connInfo.Type == "winrm" {
+			//This is for executing module to to verify windows services are
+			//avaible before executing ansible playbook
+			executeCommand := strings.Replace(moduleCommand, "in", inventoryFile, 1)
+			v.o.Output(fmt.Sprintf("running module to verify windows machine availble: %s", executeCommand))
 
-		if err := v.runCommand(executeCommand); err != nil {
-			return err
+			if err := v.runCommand(executeCommand); err != nil {
+				return err
+			}
 		}
-
 		// we can't pass bastion instance into this function
 		// we would end up with a circular import
 		command, err := play.ToLocalCommand(types.LocalModeAnsibleArgs{
