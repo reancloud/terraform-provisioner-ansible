@@ -30,6 +30,8 @@ type LocalMode struct {
 type inventoryTemplateLocalDataHost struct {
 	Alias       string
 	AnsibleHost string
+	Username    string
+	Password    string
 }
 
 type inventoryTemplateLocalData struct {
@@ -101,12 +103,26 @@ const windowsInventoryTemplateLocal = `{{$top := . -}}
 {{end}}`
 
 const inventoryTemplateLocal = `{{$top := . -}}
+[host]
 {{range .Hosts -}}
 {{.Alias -}}
 {{if ne .AnsibleHost "" -}}
 {{" "}}ansible_host={{.AnsibleHost -}}
 {{end -}}
 {{printf "\n" -}}
+
+[host:vars]
+{{" "}}ansible_user={{.Username -}}
+{{printf "\n" -}}
+{{" "}}ansible_ssh_common_args='-o StrictHostKeyChecking=no'
+{{printf "\n" -}}
+
+{{if ne .Password "" -}}
+{{" "}}ansible_password={{.Password -}}
+{{printf "\n" -}}
+
+{{end -}}
+
 {{end}}
 
 {{range .Groups -}}
@@ -256,8 +272,8 @@ func (v *LocalMode) Run(plays []*types.Play, ansibleSSHSettings *types.AnsibleSS
 			v.o.Output(fmt.Sprintf("InsecureNoStrictHostKeyChecking false"))
 			if compute_resource {
 				if ansibleSSHSettings.UserKnownHostsFile() == "" {
-					if target.hostKey() == "" {
-						v.o.Output(fmt.Sprintf("host key for '%s' not passed", target.host()))
+					if target.hostKey() == "" && target.password() == "" {
+						v.o.Output(fmt.Sprintf("host key or password for '%s' not passed", target.host()))
 						// fetchHostKey will issue an ssh Dial and update the hostKey() value
 						// as with bastionKeyScan, we might ask for the host key while the instance
 						// is not ready to respond to SSH, we need to retry for a number of times
@@ -267,11 +283,11 @@ func (v *LocalMode) Run(plays []*types.Play, ansibleSSHSettings *types.AnsibleSS
 
 						for {
 							if err := target.fetchHostKey(); err != nil {
-								v.o.Output(fmt.Sprintf("host key for '%s' not received yet; retrying...", target.host()))
+								v.o.Output(fmt.Sprintf("host key or password for '%s' not received yet; retrying...", target.host()))
 								time.Sleep(time.Duration(intervalMs) * time.Millisecond)
 								timeSpentMs = timeSpentMs + intervalMs
 								if timeSpentMs > timeoutMs {
-									v.o.Output(fmt.Sprintf("host key for '%s' not received within %d seconds",
+									v.o.Output(fmt.Sprintf("host key or password for '%s' not received within %d seconds",
 										target.host(),
 										ansibleSSHSettings.SSHKeyscanSeconds()))
 									return err
@@ -281,7 +297,7 @@ func (v *LocalMode) Run(plays []*types.Play, ansibleSSHSettings *types.AnsibleSS
 							}
 						}
 						if target.hostKey() == "" {
-							return fmt.Errorf("expected to receive the host key for '%s', but no host key arrived", target.host())
+							return fmt.Errorf("expected to receive the host key or password for '%s', but no host key arrived", target.host())
 						}
 					}
 					knownHostsTarget = append(knownHostsTarget, fmt.Sprintf("%s %s", target.host(), target.hostKey()))
@@ -423,16 +439,22 @@ func (v *LocalMode) writeInventory(play *types.Play) (string, error) {
 						templateData.Hosts = append(templateData.Hosts, inventoryTemplateLocalDataHost{
 							Alias:       playHosts[0],
 							AnsibleHost: v.connInfo.Host,
+							Username:    v.connInfo.User,
+							Password:    v.connInfo.Password,
 						})
 					} else {
 						templateData.Hosts = append(templateData.Hosts, inventoryTemplateLocalDataHost{
-							Alias: v.connInfo.Host,
+							Alias:    v.connInfo.Host,
+							Username: v.connInfo.User,
+							Password: v.connInfo.Password,
 						})
 					}
 				} else {
 
 					templateData.Hosts = append(templateData.Hosts, inventoryTemplateLocalDataHost{
-						Alias: v.connInfo.Host,
+						Alias:    v.connInfo.Host,
+						Username: v.connInfo.User,
+						Password: v.connInfo.Password,
 					})
 				}
 			} else {
@@ -440,7 +462,9 @@ func (v *LocalMode) writeInventory(play *types.Play) (string, error) {
 				for _, host := range playHosts {
 					if host != "" {
 						templateData.Hosts = append(templateData.Hosts, inventoryTemplateLocalDataHost{
-							Alias: host,
+							Alias:    host,
+							Username: v.connInfo.User,
+							Password: v.connInfo.Password,
 						})
 					}
 				}
