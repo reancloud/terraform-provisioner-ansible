@@ -3,7 +3,6 @@ package mode
 import (
 	"fmt"
 	"time"
-	
 
 	"golang.org/x/crypto/ssh"
 )
@@ -40,6 +39,10 @@ func (v *targetHost) pemFile() string {
 
 func (v *targetHost) hostKey() string {
 	return v.connInfo.HostKey
+}
+
+func (v *targetHost) password() string {
+	return v.connInfo.Password
 }
 
 func (v *targetHost) timeout() time.Duration {
